@@ -1,3 +1,5 @@
+-- [[ AMIN HUB: V3.0 - CHARACTER UPDATE ]] --
+
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --------------------------------------------------------------------------------
@@ -96,3 +98,1062 @@ local MainFrame = create("Frame", {
     Name = "MainFrame",
     Parent = OverlayGui,
     Size = UDim2.new(0, 250, 0, 0),
+    AutomaticSize = Enum.AutomaticSize.Y,
+    Position = UDim2.new(0.5, -125, 0, 20),
+    BackgroundColor3 = Config.Colors.Background,
+    BorderSizePixel = 0,
+    Active = true,
+    Draggable = true
+}, {
+    create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+    create("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)}),
+    create("UIPadding", {PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)})
+})
+
+local TitleBar = create("Frame", {
+    Name = "TitleBar",
+    Parent = MainFrame,
+    LayoutOrder = 1,
+    Size = UDim2.new(1, 0, 0, 20),
+    BackgroundTransparency = 1
+}, {
+    create("TextLabel", {
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = "Chakra Sense Monitor",
+        TextColor3 = Config.Colors.Text,
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+})
+
+local ContentBox = create("Frame", {
+    Name = "ContentBox",
+    Parent = MainFrame,
+    LayoutOrder = 2,
+    Size = UDim2.new(1, 0, 0, 0),
+    AutomaticSize = Enum.AutomaticSize.Y,
+    BackgroundColor3 = Config.Colors.Content,
+    BorderSizePixel = 0
+}, {
+    create("UICorner", {CornerRadius = UDim.new(0, 6)}),
+    create("UIPadding", {PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8)})
+})
+
+local StatusLabel = create("TextLabel", {
+    Name = "StatusLabel",
+    Parent = ContentBox,
+    Size = UDim2.new(1, 0, 0, 0),
+    AutomaticSize = Enum.AutomaticSize.Y,
+    Text = "No chakra sense user!",
+    TextColor3 = Color3.fromRGB(180, 180, 180),
+    TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamSemibold,
+    TextWrapped = true,
+    RichText = true
+})
+
+--------------------------------------------------------------------------------
+-- [4] CORE LOGIC FUNCTIONS
+--------------------------------------------------------------------------------
+
+local function playAlert()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://452267918"
+    sound.Volume = 0.8
+    sound.Parent = SoundService
+    sound:Play()
+    Debris:AddItem(sound, 2)
+end
+
+local function updateOverlayText()
+    local text = ""
+    for name, status in pairs(State.SensorHistory) do
+        -- Logic: "Active" = RED (Animation), "Possible" = GREEN (Cooldown Only)
+        local color = (status == "Active") and Config.Colors.Active or Config.Colors.Safe
+        text = text .. string.format('<font color="%s">●</font> %s\n', color, name)
+    end
+    if text ~= "" then text = text:sub(1, -2) end 
+    StatusLabel.Text = (text ~= "") and text or "No Chakra Sense Detected"
+end
+
+local function monitorPlayer(target)
+    -- [A] ANIMATION DETECTION (Triggers RED/Active)
+    local function setupChar(char)
+        local hum = char:WaitForChild("Humanoid", 10)
+        local animator = hum and hum:WaitForChild("Animator", 10)
+        if not animator then return end
+
+        local function onTrack(track)
+            if track.Animation.AnimationId:find(Config.SenseAnimID) then
+                if State.SensorHistory[target.Name] == "Active" then return end
+                
+                State.SensorHistory[target.Name] = "Active" 
+                updateOverlayText()
+                playAlert()
+                
+                Rayfield:Notify({
+                    Title = "CHAKRA SENSE DETECTED!", 
+                    Content = target.Name .. " is SENSING!", 
+                    Duration = 5,
+                    Image = Icons.Warn,
+                    ImageColor = Colors.Red
+                })
+
+                track.Stopped:Once(function()
+                    local Cooldowns = ReplicatedStorage:FindFirstChild("Cooldowns")
+                    local pFolder = Cooldowns and Cooldowns:FindFirstChild(target.Name)
+                    
+                    if pFolder and pFolder:FindFirstChild("Chakra Sense") then
+                        State.SensorHistory[target.Name] = "Possible" 
+                    else
+                        State.SensorHistory[target.Name] = nil 
+                    end
+                    
+                    updateOverlayText()
+                    
+                    Rayfield:Notify({
+                        Title = "Sense Ended", 
+                        Content = target.Name .. " stopped.", 
+                        Duration = 3,
+                        Image = Icons.Info,
+                        ImageColor = Colors.Blue
+                    })
+                end)
+            end
+        end
+        animator.AnimationPlayed:Connect(onTrack)
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do onTrack(track) end
+    end
+    if target.Character then setupChar(target.Character) end
+    target.CharacterAdded:Connect(setupChar)
+
+    -- [B] COOLDOWN OBJECT DETECTION (Triggers GREEN/Possible)
+    task.spawn(function()
+        local Cooldowns = ReplicatedStorage:WaitForChild("Cooldowns", 10)
+        if not Cooldowns then return end
+
+        local function hookFolder(folder)
+            if folder:FindFirstChild("Chakra Sense") then
+                if State.SensorHistory[target.Name] ~= "Active" then
+                    State.SensorHistory[target.Name] = "Possible"
+                    updateOverlayText()
+                end
+            end
+            
+            folder.ChildAdded:Connect(function(child)
+                if child.Name == "Chakra Sense" then
+                    if State.SensorHistory[target.Name] ~= "Active" then
+                        State.SensorHistory[target.Name] = "Possible"
+                        updateOverlayText()
+                    end
+                end
+            end)
+
+            folder.ChildRemoved:Connect(function(child)
+                if child.Name == "Chakra Sense" then
+                    if State.SensorHistory[target.Name] ~= "Active" then
+                        State.SensorHistory[target.Name] = nil
+                        updateOverlayText()
+                    end
+                end
+            end)
+        end
+
+        local pFolder = Cooldowns:FindFirstChild(target.Name)
+        if pFolder then
+            hookFolder(pFolder)
+        else
+            local conn
+            conn = Cooldowns.ChildAdded:Connect(function(child)
+                if child.Name == target.Name then
+                    hookFolder(child)
+                    if conn then conn:Disconnect() end
+                end
+            end)
+        end
+    end)
+end
+
+-- [C] PLAYER REMOVING CLEANUP
+Players.PlayerRemoving:Connect(function(player)
+    if State.SensorHistory[player.Name] then
+        State.SensorHistory[player.Name] = nil 
+        updateOverlayText() 
+    end
+end)
+
+local function stopSpectating(isSwitching)
+    if SpectateConnections.Died then SpectateConnections.Died:Disconnect() end
+    if SpectateConnections.Changed then SpectateConnections.Changed:Disconnect() end
+    State.Spectating = nil
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        Camera.CameraSubject = LocalPlayer.Character.Humanoid
+        Camera.CameraType = Enum.CameraType.Custom
+    end
+    if not isSwitching then
+        Rayfield:Notify({
+            Title = "Spectate", 
+            Content = "Returned to self", 
+            Duration = 2,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    end
+end
+
+local function startSpectating(targetId)
+    local target = nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if tostring(p.UserId) == tostring(targetId) then target = p break end
+    end
+    if not target then return end
+    stopSpectating(true)
+    State.Spectating = target
+    local function setCam()
+        if target.Character and target.Character:FindFirstChild("Humanoid") then
+            Camera.CameraType = Enum.CameraType.Custom
+            Camera.CameraSubject = target.Character.Humanoid
+        end
+    end
+    setCam()
+    SpectateConnections.Changed = Camera:GetPropertyChangedSignal("CameraSubject"):Connect(setCam)
+    SpectateConnections.Died = target.CharacterAdded:Connect(function(char)
+        local hum = char:WaitForChild("Humanoid", 10)
+        if hum then setCam() end
+    end)
+end
+
+-- [ D. TELEPORT LOGIC ] --
+local function performSafeTP()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.CFrame = CFrame.new(State.SavedSafeSpot)
+        Rayfield:Notify({
+            Title = "Teleported", 
+            Content = "Moved to Safe Spot!", 
+            Duration = 2,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    else
+        Rayfield:Notify({
+            Title = "Error", 
+            Content = "Character not found!", 
+            Duration = 2,
+            Image = Icons.Warn,
+            ImageColor = Colors.Red
+        })
+    end
+end
+
+local function teleportToSelectedPlayer()
+    local pName = State.SelectedPlayer
+    if not pName then 
+        return Rayfield:Notify({
+            Title = "Error", 
+            Content = "Select a player first!", 
+            Duration = 2,
+            Image = Icons.Warn,
+            ImageColor = Colors.Red
+        }) 
+    end
+    
+    local target = Players:FindFirstChild(pName)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local targetPos = target.Character.HumanoidRootPart.CFrame
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = targetPos * CFrame.new(0, 2, 3)
+            Rayfield:Notify({
+                Title = "Teleport", 
+                Content = "Teleported to " .. pName, 
+                Duration = 2,
+                Image = Icons.Info,
+                ImageColor = Colors.Blue
+            })
+        end
+    else
+        Rayfield:Notify({
+            Title = "Error", 
+            Content = "Player not found or dead.", 
+            Duration = 2,
+            Image = Icons.Warn,
+            ImageColor = Colors.Red
+        })
+    end
+end
+
+local function getPlayerNames()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(names, p.Name)
+        end
+    end
+    return names
+end
+
+-- [ E. CHAKRA POINT LOGIC ] --
+local function getChakraPoints()
+    local names = {}
+    State.ChakraCache = {} -- Clear old cache
+    
+    local folder = workspace:FindFirstChild("ChakraPoints")
+    if folder then
+        for _, child in ipairs(folder:GetChildren()) do
+            -- Look for the value "PointName" inside the folder
+            local pointNameObj = child:FindFirstChild("PointName")
+            local displayName = "Unknown"
+
+            if pointNameObj then
+                displayName = pointNameObj.Value -- Use the internal value
+            else
+                displayName = child.Name -- Fallback to the object name
+            end
+            
+            -- Save the object so we can find it later
+            State.ChakraCache[displayName] = child
+            table.insert(names, displayName)
+        end
+    else
+        warn("ChakraPoints folder not found in Workspace")
+    end
+    
+    table.sort(names)
+    return names
+end
+
+local function teleportToChakra()
+    local pName = State.SelectedChakra
+    if not pName then 
+        return Rayfield:Notify({Title = "Error", Content = "Select a Chakra Point first!", Duration = 2, Image = Icons.Warn, ImageColor = Colors.Red}) 
+    end
+
+    local targetInst = State.ChakraCache[pName]
+    
+    if targetInst then
+        local targetCF = nil
+        
+        -- Check if it is a Model or a Part to get position correctly
+        if targetInst:IsA("Model") then
+            targetCF = targetInst:GetPivot()
+        elseif targetInst:IsA("BasePart") then
+            targetCF = targetInst.CFrame
+        end
+
+        if targetCF and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            -- Teleport 5 studs above to prevent getting stuck in the floor
+            LocalPlayer.Character.HumanoidRootPart.CFrame = targetCF * CFrame.new(0, 5, 0)
+            Rayfield:Notify({Title = "Teleported", Content = "Arrived at " .. pName, Duration = 2, Image = Icons.Info, ImageColor = Colors.Blue})
+        end
+    else
+        Rayfield:Notify({Title = "Error", Content = "Chakra Point instance not found!", Duration = 2, Image = Icons.Warn, ImageColor = Colors.Red})
+    end
+end
+
+-- [ F. ESP ENGINE ] --
+
+-- [ CONFIGURATION ] --
+local ValidClans = {
+    ["Akimichi"] = true, ["Haruno"] = true, ["Ayrui"] = true, 
+    ["Otsutsuki"] = true, ["Uzumaki"] = true, ["Aburame"] = true, 
+    ["Uchiha"] = true, ["Hyuga"] = true, ["Kaguya"] = true, 
+    ["Yuki"] = true, ["Chinoike"] = true, ["Hoshigaki"] = true, 
+    ["Senju"] = true
+}
+
+-- Helper to convert Color3 to RichText string
+local function ToRGB(color)
+    local r = math.floor(color.R * 255)
+    local g = math.floor(color.G * 255)
+    local b = math.floor(color.B * 255)
+    return string.format("rgb(%d,%d,%d)", r, g, b)
+end
+
+local function UpdateESP()
+    if not State.ESP_Enabled then
+        for i, v in pairs(State.ESP_Storage) do 
+            if v then v:Destroy() end 
+        end
+        table.clear(State.ESP_Storage)
+        return
+    end
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            task.spawn(function()
+                local char = plr.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChild("Humanoid")
+                local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+                if char and root and hum and hum.Health > 0 then
+                    -- 1. Create GUI
+                    if not State.ESP_Storage[plr] then
+                        local bb = Instance.new("BillboardGui")
+                        bb.Name = "AminESP"
+                        bb.AlwaysOnTop = true
+                        bb.Size = UDim2.new(0, 200, 0, 150)
+                        bb.StudsOffset = Vector3.new(0, 4.5, 0)
+                        bb.Parent = CoreGui 
+
+                        local frame = Instance.new("Frame", bb)
+                        frame.Name = "Container"
+                        frame.Size = UDim2.new(1, 0, 1, 0)
+                        frame.BackgroundTransparency = 1
+
+                        local nameLbl = Instance.new("TextLabel", frame)
+                        nameLbl.Name = "NameLbl"
+                        nameLbl.Size = UDim2.new(1, 0, 0.2, 0)
+                        nameLbl.Position = UDim2.new(0, 0, 0, 0)
+                        nameLbl.BackgroundTransparency = 1
+                        nameLbl.TextStrokeTransparency = 0
+                        nameLbl.Font = Enum.Font.GothamBold
+                        nameLbl.TextSize = 13
+                        nameLbl.Text = plr.Name 
+
+                        local infoLbl = Instance.new("TextLabel", frame)
+                        infoLbl.Name = "InfoLbl"
+                        infoLbl.Size = UDim2.new(1, 0, 0.8, 0)
+                        infoLbl.Position = UDim2.new(0, 0, 0.2, 0)
+                        infoLbl.BackgroundTransparency = 1
+                        infoLbl.TextStrokeTransparency = 0
+                        infoLbl.Font = Enum.Font.Gotham
+                        infoLbl.TextSize = 11
+                        infoLbl.RichText = true 
+                        infoLbl.TextYAlignment = Enum.TextYAlignment.Top
+
+                        State.ESP_Storage[plr] = bb
+                    end
+
+                    local gui = State.ESP_Storage[plr]
+                    gui.Adornee = root
+                    gui.Enabled = true
+
+                    local container = gui:FindFirstChild("Container")
+                    local nameLbl = container and container:FindFirstChild("NameLbl")
+                    local infoLbl = container and container:FindFirstChild("InfoLbl")
+
+                    -- [ 1. CLAN ] --
+                    local clanStr = ""
+                    local attributes = char:GetAttributes()
+                    for attrName, val in pairs(attributes) do
+                        if val == true and ValidClans[attrName] then
+                            clanStr = "[" .. attrName .. "]"
+                            break 
+                        end
+                    end
+
+                    -- [ 2. NAME & TEAM ] --
+                    if nameLbl then
+                        nameLbl.Visible = State.ESP_Name
+                        nameLbl.Text = plr.Name
+                        if plr.TeamColor then
+                            nameLbl.TextColor3 = plr.TeamColor.Color
+                        else
+                            nameLbl.TextColor3 = Color3.new(1, 1, 1)
+                        end
+                    end
+
+                    -- [ 3. INFO TEXT ] --
+                    local finalInfoText = ""
+
+                    -- Clan
+                    if clanStr ~= "" and (State.ESP_Name or State.ESP_Health) then
+                        finalInfoText = finalInfoText .. string.format('<font color="rgb(200,200,200)">%s</font>\n', clanStr)
+                    end
+
+                    -- Health
+                    if State.ESP_Health then
+                        local hp = math.floor(hum.Health)
+                        local maxHp = math.floor(hum.MaxHealth)
+                        local hpPercent = math.clamp(hp / maxHp, 0, 1)
+                        local hpColor = Color3.fromHSV(hpPercent * 0.33, 1, 1)
+                        finalInfoText = finalInfoText .. string.format('<font color="%s">HP: %d/%d</font>\n', ToRGB(hpColor), hp, maxHp)
+                    end
+
+                    -- Chakra
+                    if State.ESP_Chakra then
+                        local bp = plr:FindFirstChild("Backpack")
+                        local chak = bp and bp:FindFirstChild("chakra")
+                        local mChak = bp and bp:FindFirstChild("maxChakra")
+                        
+                        if chak and mChak then
+                            local cVal = math.floor(chak.Value)
+                            local mVal = math.floor(mChak.Value)
+                            finalInfoText = finalInfoText .. string.format('<font color="rgb(80,150,255)">Chakra: %d/%d</font>\n', cVal, mVal)
+                        else
+                            finalInfoText = finalInfoText .. "Chakra: N/A\n"
+                        end
+                    end
+
+                    -- Distance
+                    if myRoot then
+                        local dist = math.floor((root.Position - myRoot.Position).Magnitude)
+                        finalInfoText = finalInfoText .. string.format('<font color="rgb(255,255,255)">[%dm]</font>', dist)
+                    end
+
+                    if infoLbl then
+                        infoLbl.Visible = true
+                        infoLbl.Text = finalInfoText
+                        infoLbl.TextColor3 = Color3.new(1, 1, 1)
+                    end
+
+                else
+                    if State.ESP_Storage[plr] then
+                        State.ESP_Storage[plr].Enabled = false
+                    end
+                end
+            end)
+        else
+            if State.ESP_Storage[plr] then
+                State.ESP_Storage[plr]:Destroy()
+                State.ESP_Storage[plr] = nil
+            end
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(UpdateESP)
+
+--------------------------------------------------------------------------------
+-- [5] AUTOMATION & CHARACTER LOOPS
+--------------------------------------------------------------------------------
+
+-- [[ CHARACTER MOVEMENT (FLY/NOCLIP) ]] --
+RunService.Stepped:Connect(function()
+    -- NOCLIP LOGIC
+    if State.Noclip and LocalPlayer.Character then
+        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+            if v:IsA("BasePart") and v.CanCollide then 
+                v.CanCollide = false 
+            end
+        end
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    -- FLY LOGIC
+    if State.Fly and LocalPlayer.Character then
+        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+        
+        if root and hum and hum.Health > 0 then
+            local camCF = workspace.CurrentCamera.CFrame
+            local moveDir = Vector3.zero
+            
+            -- Direction calculation
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0,1,0) end
+            
+            -- Apply Fly
+            root.Velocity = Vector3.zero -- Cancel Gravity
+            if moveDir.Magnitude > 0 then
+                root.CFrame = root.CFrame + (moveDir * State.FlySpeed)
+            end
+            
+            -- Prevent falling animation if possible (PlatformStand)
+            hum.PlatformStand = true
+        else
+            -- Ensure we disable platform stand if we turn fly off or die
+            if hum and not State.Fly then hum.PlatformStand = false end
+        end
+    elseif LocalPlayer.Character then
+        -- Cleanup when fly is toggled off
+        local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+end)
+
+
+-- [[ FARMING LOOPS ]] --
+task.spawn(function()
+    while task.wait(0.5) do
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if State.AutoSummon and hrp and (tick() - State.LastSummonTime) >= 14 then
+            pcall(function()
+                local hum = char:FindFirstChild("Humanoid")
+                local animStart, animRelease = Instance.new("Animation"), Instance.new("Animation")
+                animStart.AnimationId = "rbxassetid://83279463673214"
+                animRelease.AnimationId = "rbxassetid://6894770447"
+                local lStart = hum:LoadAnimation(animStart)
+                local lRelease = hum:LoadAnimation(animRelease)
+                lStart:Play()
+                game:GetService("ReplicatedStorage").Events.DataEvent:FireServer("startSkill", "Fruit Summoning", hrp.Position, true, "MouseButton2")
+                task.wait(0.3)
+                lStart:Stop()
+                lRelease:Play()
+                game:GetService("ReplicatedStorage").Events.DataEvent:FireServer("ReleaseSkill")
+                State.LastSummonTime = tick()
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.5) do
+        -- AUTO COLLECT
+        if State.AutoCollect and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+            for _, item in ipairs(workspace:GetChildren()) do
+                if table.find(Config.FruitList, item.Name) and (myPos - item.Position).Magnitude <= 12 then
+                    local det = item:FindFirstChild("ItemDetector")
+                    if det then 
+                        fireclickdetector(det)
+                        task.wait(math.random(5, 12)/10)
+                        break 
+                    end
+                end
+            end
+        end
+
+        -- NO FOG
+        if State.NoFog then
+            Lighting.FogEnd = 9e9
+            Lighting.FogStart = 0
+        end
+
+        -- FORCE CHAT
+        if State.ForceChat then
+            pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true) end)
+            if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+                local config = TextChatService:FindFirstChild("ChatWindowConfiguration")
+                local input = TextChatService:FindFirstChild("ChatInputBarConfiguration")
+                if config then config.Enabled = true end
+                if input then input.Enabled = true end
+            end
+        end
+    end
+end)
+
+-- [[ DATA LISTENER LOOP ]] --
+task.spawn(function()
+    local DataEvent = ReplicatedStorage:WaitForChild("Events"):FindFirstChild("DataEvent")
+    if DataEvent then
+        DataEvent.OnClientEvent:Connect(function(key, data)
+            if key == "UpdateData" and type(data) == "table" then
+                State.CachedData = data -- Silently save data
+                print("[AminHub] Data Cached")
+            end
+        end)
+    end
+end)
+
+-- [ SHOPS ] --
+local function openShop(name)
+    local gui = LocalPlayer:FindFirstChild("PlayerGui")
+    if gui and gui:FindFirstChild(name) then
+        gui[name].Enabled = true
+        Rayfield:Notify({
+            Title = "Success", 
+            Content = "Opened " .. name, 
+            Duration = 2,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    else
+        Rayfield:Notify({
+            Title = "Error", 
+            Content = "Shop not found: " .. name, 
+            Duration = 2,
+            Image = Icons.Warn,
+            ImageColor = Colors.Red
+        })
+    end
+end
+
+--------------------------------------------------------------------------------
+-- [6] RAYFIELD INTERFACE
+--------------------------------------------------------------------------------
+local Window = Rayfield:CreateWindow({
+    Name = "Amin Hub",
+    LoadingTitle = "Amin Hub V2.9",
+    LoadingSubtitle = "Bloodline Script",
+    ConfigurationSaving = {Enabled = true},
+    ToggleUIKeybind = "K",
+    Theme = "DarkBlue"
+})
+
+local Tabs = {
+    Main = Window:CreateTab("Main Tab", nil),
+    Character = Window:CreateTab("Character", nil), 
+    Visuals = Window:CreateTab("Visuals", nil),
+    Teleportation = Window:CreateTab("Teleportation", nil),
+    Auto = Window:CreateTab("Automation", nil)
+}
+
+Tabs.Main:CreateSection("Session Info")
+local Labels = {
+    Server = Tabs.Main:CreateLabel("Server: Loading..."),
+    Region = Tabs.Main:CreateLabel("Region: Loading...")
+}
+
+-- [MAIN TAB] --
+task.spawn(function()
+    pcall(function()
+        local gui = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("ClientGui"):WaitForChild("Mainframe")
+        local sName = gui.Rest.MainMenuFrame.ServerName.Text:gsub("Server Name : ", "")
+        local sRegion = gui.Loadout.TopFrame.Region.Text:gsub("Server Region : ", "")
+        Labels.Server:Set("Server: " .. sName)
+        Labels.Region:Set("Region: " .. sRegion)
+    end)
+end)
+
+Tabs.Main:CreateSection("Visuals & Utilities")
+
+Tabs.Main:CreateToggle({Name = "Force Default Chat", CurrentValue = false, Callback = function(V) State.ForceChat = V end})
+Tabs.Main:CreateToggle({Name = "No Fog (Clear Vision)", CurrentValue = false, Callback = function(V) 
+    State.NoFog = V 
+    if V then for _, v in pairs(Lighting:GetChildren()) do if v:IsA("Atmosphere") then v:Destroy() end end end
+end})
+Tabs.Main:CreateToggle({Name = "Show Sense Monitor", CurrentValue = true, Callback = function(V) OverlayGui.Enabled = V end})
+Tabs.Main:CreateKeybind({Name = "Stop Spectating (X)", CurrentKeybind = "X", HoldToInteract = false, Callback = function() stopSpectating(false) end})
+
+Tabs.Main:CreateKeybind({
+    Name = "Reset Character",
+    CurrentKeybind = "RightControl",
+    HoldToInteract = false,
+    Callback = function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.Health = 0
+            Rayfield:Notify({
+                Title = "Reset", 
+                Content = "Character Reset", 
+                Duration = 2,
+                Image = Icons.Info,
+                ImageColor = Colors.Blue
+            })
+        end
+    end
+})
+
+
+-- [ INSTANT STAT TRACKER SECTION ] --
+Tabs.Main:CreateSection("Instant Stat Tracker")
+
+local StatOptions = {
+    "M1s", "Grips", "Knocks", "PB", 
+    "JinchurikiUsage", "GreenGatesUsage", "KetsuryuganUsage", "SharinganUsage", 
+    "Reputation", "FireXP", "LightningXP", "WindXP", "EarthXP", "WaterXP", "WoodXP", "GenjutsuXP",
+    "PrevMangekyo"
+}
+
+Tabs.Main:CreateDropdown({
+    Name = "Check Stats (Auto-Fetch)",
+    Options = StatOptions,
+    CurrentOption = {"M1s"}, 
+    MultiSelection = true, 
+    Callback = function(Selected)
+        -- 1. Define the function to display stats (so we can use it later)
+        local function displayStats()
+            if not State.CachedData then return end
+            
+            local contentString = ""
+            for _, statName in ipairs(Selected) do
+                local val = State.CachedData[statName]
+                
+                if val == nil then val = "?" 
+                elseif type(val) == "table" then
+                    local tStr = ""
+                    for k, v in pairs(val) do tStr = tStr .. k..":"..v..", " end
+                    val = tStr:sub(1, -3)
+                end
+                
+                contentString = contentString .. "• " .. statName .. ": " .. tostring(val) .. "\n"
+            end
+            
+            if contentString ~= "" then
+                Rayfield:Notify({
+                    Title = "Current Stats",
+                    Content = contentString,
+                    Duration = 5,
+                    Image = Icons.Info,
+                    ImageColor = Colors.Blue
+                })
+            end
+        end
+
+        -- 2. Check if we already have data
+        if State.CachedData then
+            displayStats()
+        else
+            -- 3. If NO data, fetch it and wait
+            Rayfield:Notify({
+                Title = "Fetching...",
+                Content = "Initializing data (LoadedIn)...",
+                Duration = 2,
+                Image = Icons.Info,
+                ImageColor = Colors.Blue
+            })
+            
+            -- Fire "LoadedIn" to force the server to send the full data packet
+            game:GetService("ReplicatedStorage").Events.DataEvent:FireServer("LoadedIn")
+            game:GetService("ReplicatedStorage").Events.DataEvent:FireServer("UpdateItems")
+
+            -- Wait loop (Max 3 seconds)
+            task.spawn(function()
+                local timeout = 0
+                repeat 
+                    task.wait(0.2)
+                    timeout = timeout + 0.2
+                until State.CachedData or timeout > 3
+                
+                if State.CachedData then
+                    displayStats() -- Show automatically once data arrives
+                else
+                    Rayfield:Notify({
+                        Title = "Timeout",
+                        Content = "Server didn't send data in time. Try again.",
+                        Duration = 3,
+                        Image = Icons.Warn,
+                        ImageColor = Colors.Red
+                    })
+                end
+            end)
+        end
+    end
+})
+
+Tabs.Main:CreateButton({
+    Name = "Force Refresh Data",
+    Callback = function()
+        ReplicatedStorage.Events.DataEvent:FireServer("LoadedIn")
+        Rayfield:Notify({
+            Title = "Refreshed", 
+            Content = "Updated latest values!", 
+            Duration = 2,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    end
+})
+
+-- [SHOP] --
+Tabs.Main:CreateSection("Shops")
+Tabs.Main:CreateButton({Name = "Open Halloween Shop", Callback = function() openShop("HalloweenShop") end})
+Tabs.Main:CreateButton({Name = "Open Event Collection", Callback = function() openShop("EventCollectionShop") end})
+Tabs.Main:CreateButton({Name = "Open Ember Shop", Callback = function() openShop("WipeShop") end})
+Tabs.Main:CreateButton({Name = "Open Xmas Shop", Callback = function() openShop("XmasShop") end})
+
+-- [ CHARACTER TAB] --
+Tabs.Character:CreateSection("Movement")
+
+Tabs.Character:CreateToggle({
+    Name = "Enable Fly (CFrame)",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.Fly = Value
+    end
+})
+
+Tabs.Character:CreateSlider({
+    Name = "Fly Speed",
+    Range = {1, 10},
+    Increment = 0.5,
+    CurrentValue = 1,
+    Callback = function(Value)
+        State.FlySpeed = Value
+    end
+})
+
+Tabs.Character:CreateKeybind({
+    Name = "Toggle Fly Bind",
+    CurrentKeybind = "N",
+    HoldToInteract = false,
+    Callback = function()
+        -- Toggles the state boolean directly
+        State.Fly = not State.Fly
+        Rayfield:Notify({
+            Title = "Fly", 
+            Content = State.Fly and "Enabled" or "Disabled", 
+            Duration = 1,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    end
+})
+
+Tabs.Character:CreateSection("Collision")
+
+Tabs.Character:CreateToggle({
+    Name = "Noclip (Walk Through Walls)",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.Noclip = Value
+    end
+})
+
+Tabs.Character:CreateKeybind({
+    Name = "Toggle Noclip Bind",
+    CurrentKeybind = "M",
+    HoldToInteract = false,
+    Callback = function()
+        State.Noclip = not State.Noclip
+        Rayfield:Notify({
+            Title = "Noclip", 
+            Content = State.Noclip and "Enabled" or "Disabled", 
+            Duration = 1,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    end
+})
+
+-- [ VISUALS TAB (ESP) ] --
+Tabs.Visuals:CreateSection("ESP Settings")
+
+Tabs.Visuals:CreateToggle({
+    Name = "Master ESP Switch",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.ESP_Enabled = Value
+    end
+})
+
+Tabs.Visuals:CreateToggle({
+    Name = "Show Player Name",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.ESP_Name = Value
+    end
+})
+
+Tabs.Visuals:CreateToggle({
+    Name = "Show Health (Color Gradient)",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.ESP_Health = Value
+    end
+})
+
+Tabs.Visuals:CreateToggle({
+    Name = "Show Chakra Info",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.ESP_Chakra = Value
+    end
+})
+
+-- [ TELEPORTATION TAB ] --
+Tabs.Teleportation:CreateSection("Safe Teleport")
+
+local TpLabel = Tabs.Teleportation:CreateLabel("Saved Spot: Default")
+
+Tabs.Teleportation:CreateButton({
+    Name = "TP to Safe Spot",
+    Callback = function() performSafeTP() end
+})
+
+Tabs.Teleportation:CreateButton({
+    Name = "Set Current Pos as Safe Spot",
+    Callback = function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            State.SavedSafeSpot = LocalPlayer.Character.HumanoidRootPart.Position
+            local pos = State.SavedSafeSpot
+            TpLabel:Set(string.format("Saved: %.0f, %.0f, %.0f", pos.X, pos.Y, pos.Z))
+            Rayfield:Notify({
+                Title = "Position Saved", 
+                Content = "Safe spot updated to current location.", 
+                Duration = 2,
+                Image = Icons.Info,
+                ImageColor = Colors.Blue
+            })
+        end
+    end
+})
+
+Tabs.Teleportation:CreateButton({
+    Name = "Reset to Default",
+    Callback = function()
+        State.SavedSafeSpot = Config.DefaultSafeSpot
+        TpLabel:Set("Saved Spot: Default Config")
+        Rayfield:Notify({
+            Title = "Reset", 
+            Content = "Safe spot reset to default.", 
+            Duration = 2,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    end
+})
+
+-- [PLAYER TELEPORT] --
+Tabs.Teleportation:CreateSection("Player Teleport")
+
+local PlayerDropdown = Tabs.Teleportation:CreateDropdown({
+    Name = "Select Player",
+    Options = getPlayerNames(),
+    CurrentOption = "",
+    Callback = function(Option)
+        State.SelectedPlayer = type(Option) == "table" and Option[1] or Option
+    end
+})
+
+Tabs.Teleportation:CreateButton({
+    Name = "Refresh Player List",
+    Callback = function()
+        local newNames = getPlayerNames()
+        PlayerDropdown:Refresh(newNames, true)
+        Rayfield:Notify({
+            Title = "Refreshed", 
+            Content = "Player list updated", 
+            Duration = 1,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+    end
+})
+
+Tabs.Teleportation:CreateButton({
+    Name = "Teleport to Player",
+    Callback = function() teleportToSelectedPlayer() end
+})
+
+-- [ CHAKRA POINTS SECTION ] --
+Tabs.Teleportation:CreateSection("Chakra Points")
+
+local ChakraDropdown = Tabs.Teleportation:CreateDropdown({
+    Name = "Select Chakra Point",
+    Options = getChakraPoints(), 
+    CurrentOption = "",
+    Callback = function(Option)
+        State.SelectedChakra = type(Option) == "table" and Option[1] or Option
+    end
+})
+
+Tabs.Teleportation:CreateButton({
+    Name = "Teleport to Point",
+    Callback = function() teleportToChakra() end
+})
+
+-- [ AUTO ] --
+Tabs.Auto:CreateSection("Fruit Farming")
+Tabs.Auto:CreateToggle({Name = "Auto-Summon (Mastered)", CurrentValue = false, Callback = function(V) State.AutoSummon = V end})
+Tabs.Auto:CreateToggle({Name = "Auto-Collect", CurrentValue = false, Callback = function(V) State.AutoCollect = V end})
+
+-- [ INIT ] --
+LogService.MessageOut:Connect(function(msg)
+    local id = msg:match("trying to view(%d+)")
+    if id then startSpectating(id) end
+end)
+
+for _, p in ipairs(Players:GetPlayers()) do monitorPlayer(p) end
+Players.PlayerAdded:Connect(monitorPlayer)
+
+Rayfield:Notify({
+    Title = "System Ready", 
+    Content = "Amin Hub V2.9 Loaded", 
+    Duration = 3,
+    Image = Icons.Info,
+    ImageColor = Colors.Blue
+})
