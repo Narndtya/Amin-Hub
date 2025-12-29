@@ -38,7 +38,7 @@ local Colors = {
 local Config = {
     SenseAnimID     = "9864206537",
     FruitList       = {"Pear", "Apple", "Alluring Apple", "Orange", "Frosty Pear", "Banana", "Mango", "Life Up Fruit"},
-    DefaultSafeSpot = Vector3.new(-322.59, -266.36, -1111.01),
+    DefaultSafeSpot = Vector3.new(464, -329, 164),
     Colors          = {
         Background = Color3.fromRGB(30, 30, 45),
         Content    = Color3.fromRGB(40, 40, 60),
@@ -54,7 +54,7 @@ local State = {
     NoFog          = false,
     ForceChat      = false,
     Fly            = false, 
-    FlySpeed       = 1.0,   
+    FlySpeed       = 5.0,   
     Noclip         = false,
     NoFall         = false,
     LastSummonTime = 0,
@@ -67,11 +67,11 @@ local State = {
     ChakraCache    = {},
 
     -- [ ESP STATE ] --
-    ESP_Enabled    = false,
-    ESP_Box        = false,
-    ESP_Name       = false,
-    ESP_Health     = false, -- Text & Bar
-    ESP_Chakra     = false, -- Text
+    ESP_Enabled    = true,
+    ESP_Box        = true,
+    ESP_Name       = true,
+    ESP_Health     = true, -- Text & Bar
+    ESP_Chakra     = true, -- Text
     ESP_Storage    = {}     -- Cache for GUI elements
 }
 
@@ -1152,7 +1152,7 @@ Players.PlayerAdded:Connect(monitorPlayer)
 
 Rayfield:Notify({
     Title = "System Ready", 
-    Content = "Amin Hub V2.9 Loaded", 
+    Content = "Amin Hub V3 Loaded", 
     Duration = 3,
     Image = Icons.Info,
     ImageColor = Colors.Blue
