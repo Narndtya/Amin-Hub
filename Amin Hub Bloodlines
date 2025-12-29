@@ -98,4 +98,3 @@ local MainFrame = create("Frame", {
     Name = "MainFrame",
     Parent = OverlayGui,
     Size = UDim2.new(0, 250, 0, 0),
-... (1,059 lines left)
