@@ -1,5 +1,3 @@
--- [[ AMIN HUB: V3.0 - CHARACTER UPDATE ]] --
-
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --------------------------------------------------------------------------------
