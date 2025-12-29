@@ -1,0 +1,101 @@
+-- [[ AMIN HUB: V3.0 - CHARACTER UPDATE ]] --
+
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+--------------------------------------------------------------------------------
+-- [1] SERVICES & VARIABLES
+--------------------------------------------------------------------------------
+local Players           = game:GetService("Players")
+local LogService        = game:GetService("LogService")
+local CoreGui           = game:GetService("CoreGui")
+local SoundService      = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting          = game:GetService("Lighting")
+local StarterGui        = game:GetService("StarterGui")
+local TextChatService   = game:GetService("TextChatService")
+local Debris            = game:GetService("Debris")
+local HttpService       = game:GetService("HttpService")
+local TeleportService   = game:GetService("TeleportService")
+local RunService        = game:GetService("RunService")         -- Added
+local UserInputService  = game:GetService("UserInputService")   -- Added
+
+local LocalPlayer       = Players.LocalPlayer
+local Camera            = workspace.CurrentCamera
+
+-- [[ NOTIFICATION ASSETS ]] --
+local Icons = {
+    Info = 17829948066,
+    Warn = 89223579269926,
+}
+local Colors = {
+    Blue = Color3.fromRGB(60, 130, 255),
+    Red  = Color3.fromRGB(255, 80, 80)
+}
+
+--------------------------------------------------------------------------------
+-- [2] CONFIGURATION & STATE
+--------------------------------------------------------------------------------
+local Config = {
+    SenseAnimID     = "9864206537",
+    FruitList       = {"Pear", "Apple", "Alluring Apple", "Orange", "Frosty Pear", "Banana", "Mango", "Life Up Fruit"},
+    DefaultSafeSpot = Vector3.new(-322.59, -266.36, -1111.01),
+    Colors          = {
+        Background = Color3.fromRGB(30, 30, 45),
+        Content    = Color3.fromRGB(40, 40, 60),
+        Text       = Color3.fromRGB(200, 200, 200),
+        Active     = "rgb(255,80,80)", -- Red
+        Safe       = "rgb(80,255,80)"  -- Green
+    }
+}
+
+local State = {
+    AutoSummon     = false,
+    AutoCollect    = false,
+    NoFog          = false,
+    ForceChat      = false,
+    Fly            = false, 
+    FlySpeed       = 1.0,   
+    Noclip         = false,
+    NoFall         = false,
+    LastSummonTime = 0,
+    SensorHistory  = {}, 
+    Spectating     = nil,
+    SavedSafeSpot  = Config.DefaultSafeSpot,
+    SelectedPlayer = nil,
+    CachedData     = nil,
+    SelectedChakra = nil,
+    ChakraCache    = {},
+
+    -- [ ESP STATE ] --
+    ESP_Enabled    = false,
+    ESP_Box        = false,
+    ESP_Name       = false,
+    ESP_Health     = false, -- Text & Bar
+    ESP_Chakra     = false, -- Text
+    ESP_Storage    = {}     -- Cache for GUI elements
+}
+
+local SpectateConnections = { Died = nil, Changed = nil }
+
+--------------------------------------------------------------------------------
+-- [3] OVERLAY GUI CONSTRUCTION
+--------------------------------------------------------------------------------
+local function create(className, props, children)
+    local inst = Instance.new(className)
+    for k, v in pairs(props or {}) do inst[k] = v end
+    for _, child in pairs(children or {}) do child.Parent = inst end
+    return inst
+end
+
+local OverlayGui = create("ScreenGui", {
+    Name = "AminHub_Monitor_V2",
+    Parent = (gethui and gethui()) or CoreGui,
+    ResetOnSpawn = false,
+    Enabled = true
+})
+
+local MainFrame = create("Frame", {
+    Name = "MainFrame",
+    Parent = OverlayGui,
+    Size = UDim2.new(0, 250, 0, 0),
+... (1,059 lines left)
