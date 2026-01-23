@@ -1,0 +1,242 @@
+end)
+end
+
+-- [SERVER HOP FUNCTION] --
+-- [[ SERVER HOP ]] --
+local function ServerHop()
+    Rayfield:Notify({
+        Title = "Server Hop",
+        Content = "Scanning server list...",
+        Duration = 2,
+        Image = Icons.Info,
+        ImageColor = Colors.Blue
+    })
+    -- 1. GET BOARD REFERENCE
+    local ChakraFolder = Workspace:FindFirstChild("ChakraPoints")
+    local ChakraPoint = ChakraFolder and ChakraFolder:FindFirstChild("ChakraPoint")
+    
+    if not ChakraPoint then
+        return Rayfield:Notify({Title = "Error", Content = "Board object missing.", Duration = 3, Image = Icons.Info, ImageColor = Colors.Red})
+    end
+
+    local PlaceID = game.PlaceId
+    local AllIDs = {}
+    local found = false
+
+    local success, _ = pcall(function()
+        local Site = HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Desc&limit=100'))
+        if Site and Site.data then
+            for _, v in pairs(Site.data) do
+                -- Filter: Not full, and not the server we are currently in
+                if type(v) == "table" and v.playing and v.maxPlayers and v.playing < (v.maxPlayers - 1) and v.id ~= game.JobId then
+                    table.insert(AllIDs, v.id)
+    -- 2. FIND & PARSE SERVER
+    local ServersFolder = ReplicatedStorage:FindFirstChild("Servers")
+    if not ServersFolder then return end
+
+    local potentialServers = {}
+    local currentJobId = game.JobId
+
+    for _, srv in pairs(ServersFolder:GetChildren()) do
+        if srv:IsA("StringValue") then
+            -- PARSE: "UUID Count" (Splits the string to get real data)
+            local split = string.split(srv.Value, " ")
+            if #split >= 2 then
+                local uuid = split[1]
+                local count = tonumber(split[2])
+                
+                -- Valid, Number, Not Current, Not Full (<18)
+                if uuid and #uuid > 10 and count and uuid ~= currentJobId and count < 18 then
+                    table.insert(potentialServers, {
+                        Name = srv.Name,
+                        UUID = uuid,
+                        Count = count
+                    })
+end
+end
+end
+    end)
+    end
+
+    if success and #AllIDs > 0 then
+        Rayfield:Notify({
+            Title = "Hopping",
+            Content = "Server found! Teleporting...",
+            Duration = 3,
+            Image = Icons.Info,
+            ImageColor = Colors.Blue
+        })
+        found = true
+        TeleportService:TeleportToPlaceInstance(PlaceID, AllIDs[math.random(1, #AllIDs)], LocalPlayer)
+    else
+        Rayfield:Notify({
+            Title = "Hop Failed",
+            Content = "Could not find a better server.",
+            Duration = 3,
+            Image = Icons.Warn,
+            ImageColor = Colors.Red
+        })
+    if #potentialServers == 0 then
+        return Rayfield:Notify({Title = "No Servers", Content = "No valid servers found.", Duration = 3, Image = Icons.Info, ImageColor = Colors.Red})
+end
+end
+
+    local target = potentialServers[math.random(1, #potentialServers)]
+
+    -- [[ EXECUTE HUMANIZED SEQUENCE ]] --
+    
+    Rayfield:Notify({Title = "Action 1", Content = "Accessing Board...", Duration = 1, Image = Icons.Info, ImageColor = Colors.Blue})
+
+    -- A. FIRE SIT (Change State to 'Sitting')
+    task.spawn(function()
+        pcall(function()
+            local args = {[1] = "ChakraPointSit", [2] = ChakraPoint}
+            ReplicatedStorage.Events.DataFunction:InvokeServer(unpack(args))
+        end)
+    end)
+    
+    -- B. HUMAN DELAY (Crucial prevention for 'Impossible Action' kick)
+    local humanDelay = math.random(6, 12) / 10 -- Random between 0.6s and 1.2s
+    task.wait(humanDelay)
+
+    -- C. FIRE TELEPORT (With Correct Data)
+    Rayfield:Notify({
+        Title = "Action 2", 
+        Content = "Joining " .. target.Name .. " (" .. target.Count .. ")", 
+        Duration = 3, 
+        Image = Icons.Safe, 
+        ImageColor = Colors.Green
+    })
+
+    local args = {
+        [1] = "ServerTeleport",
+        [2] = target.UUID,
+        [3] = target.Count
+    }
+    ReplicatedStorage.Events.DataEvent:FireServer(unpack(args))
+end
+-- [ TELEPORT LOGIC ] --
+local function performSafeTP()
+local char = LocalPlayer.Character
+@@ -549,8 +577,6 @@ Tabs.Main:CreateButton({
+end
+})
+
+
+
+-- [ TELEPORTATION TAB ] --
+Tabs.Teleportation:CreateSection("Safe Teleport")
+
+@@ -626,6 +652,36 @@ Tabs.Teleportation:CreateButton({
+Callback = function() teleportToSelectedPlayer() end
+})
+
+-- [ MAIN TAB (VISUALS) ] --
+Tabs.Main:CreateSection("Visuals & Utilities")
+
+Tabs.Main:CreateToggle({Name = "Force Default Chat", CurrentValue = false, Callback = function(V) State.ForceChat = V end})
+Tabs.Main:CreateToggle({Name = "No Fog (Clear Vision)", CurrentValue = false, Callback = function(V) 
+    State.NoFog = V 
+    if V then for _, v in pairs(Lighting:GetChildren()) do if v:IsA("Atmosphere") then v:Destroy() end end end
+end})
+Tabs.Main:CreateToggle({Name = "Show Sense Monitor", CurrentValue = true, Callback = function(V) OverlayGui.Enabled = V end})
+Tabs.Main:CreateKeybind({Name = "Stop Spectating (X)", CurrentKeybind = "X", HoldToInteract = false, Callback = function() stopSpectating(false) end})
+
+Tabs.Main:CreateKeybind({
+    Name = "Reset Character",
+    CurrentKeybind = "RightControl",
+    HoldToInteract = false,
+    Callback = function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.Health = 0
+            Rayfield:Notify({
+                Title = "Reset", 
+                Content = "Character Reset", 
+                Duration = 2,
+                Image = Icons.Info,
+                ImageColor = Colors.Blue
+            })
+        end
+    end
+})
+
+
+-- [ INSTANT STAT TRACKER SECTION ] --
+Tabs.Main:CreateSection("Instant Stat Tracker")
+
+@@ -637,12 +693,15 @@ local StatOptions = {
+}
+
+Tabs.Main:CreateDropdown({
+    Name = "Check Stats (If none showing drop an item)",
+    Name = "Check Stats (Auto-Fetch)",
+Options = StatOptions,
+CurrentOption = {"M1s"}, 
+MultiSelection = true, 
+Callback = function(Selected)
+        if State.CachedData then
+        -- 1. Define the function to display stats (so we can use it later)
+        local function displayStats()
+            if not State.CachedData then return end
+            
+local contentString = ""
+for _, statName in ipairs(Selected) do
+local val = State.CachedData[statName]
+@@ -666,23 +725,53 @@ Tabs.Main:CreateDropdown({
+ImageColor = Colors.Blue
+})
+end
+        end
+
+        -- 2. Check if we already have data
+        if State.CachedData then
+            displayStats()
+else
+            -- 3. If NO data, fetch it and wait
+Rayfield:Notify({
+Title = "Fetching...",
+                Content = "Loading data...",
+                Duration = 1,
+                Content = "Initializing data (LoadedIn)...",
+                Duration = 2,
+Image = Icons.Info,
+ImageColor = Colors.Blue
+})
+            ReplicatedStorage.Events.DataEvent:FireServer("UpdateItems")
+            
+            -- Fire "LoadedIn" to force the server to send the full data packet
+            game:GetService("ReplicatedStorage").Events.DataEvent:FireServer("LoadedIn")
+            game:GetService("ReplicatedStorage").Events.DataEvent:FireServer("UpdateItems")
+
+            -- Wait loop (Max 3 seconds)
+            task.spawn(function()
+                local timeout = 0
+                repeat 
+                    task.wait(0.2)
+                    timeout = timeout + 0.2
+                until State.CachedData or timeout > 3
+                
+                if State.CachedData then
+                    displayStats() -- Show automatically once data arrives
+                else
+                    Rayfield:Notify({
+                        Title = "Timeout",
+                        Content = "Server didn't send data in time. Try again.",
+                        Duration = 3,
+                        Image = Icons.Warn,
+                        ImageColor = Colors.Red
+                    })
+                end
+            end)
+end
+end
+})
+
+Tabs.Main:CreateButton({
+Name = "Force Refresh Data",
+Callback = function()
+        ReplicatedStorage.Events.DataEvent:FireServer("UpdateItems")
+        ReplicatedStorage.Events.DataEvent:FireServer("LoadedIn")
+Rayfield:Notify({
+Title = "Refreshed", 
+Content = "Updated latest values!", 
